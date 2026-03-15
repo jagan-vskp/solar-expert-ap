@@ -49,6 +49,19 @@ monsoon installations, local suppliers, net metering, costs
 
 KEY FACTS: AP has 5.4 sun hrs, Kurnool 5.8, cost ₹40-48/W, electricity ₹4-9/kWh
 
+IMPORTANT FOR WHATSAPP:
+- Keep responses CONCISE (under 1000 chars when possible)
+- Break long explanations into focused points
+- Use bullet points and short paragraphs
+- If topic is complex, offer to explain in parts
+- Mobile-friendly formatting
+
+RESPONSE STYLE:
+- Start with warm Telugu greeting
+- Give direct answer first
+- Add details if needed
+- End with helpful follow-up question
+
 STYLE: Ask questions, give AP examples, calculate in INR, use analogies, be encouraging
 
 You're passionate about helping AP adopt solar!"""
@@ -100,7 +113,7 @@ You're passionate about helping AP adopt solar!"""
                 model="gpt-4-turbo-preview",
                 messages=msgs[-15:],
                 temperature=0.8,
-                max_tokens=1500
+                max_tokens=800  # Reduced for WhatsApp-friendly responses
             )
             reply = resp.choices[0].message.content
             self.history.append({"role": "assistant", "content": reply})

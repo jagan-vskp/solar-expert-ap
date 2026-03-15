@@ -96,15 +96,21 @@ Just ask naturally! I'll Google search for latest info."""
         # Create Twilio response
         resp = MessagingResponse()
         
-        # Split long messages (WhatsApp limit ~1600 chars)
-        if len(response_text) > 1500:
-            chunks = split_message(response_text, 1500)
-            for chunk in chunks:
-                resp.message(chunk)
-            print(f"✅ Response sent in {len(chunks)} chunks")
+        # Split long messages (WhatsApp sandbox limit ~1600, using 1200 to be safe)
+        if len(response_text) > 1200:
+            chunks = split_message(response_text, 1200)
+            print(f"✅ Splitting response into {len(chunks)} parts")
+            
+            # Add part numbers if more than 2 chunks
+            if len(chunks) > 2:
+                for i, chunk in enumerate(chunks, 1):
+                    resp.message(f"[Part {i}/{len(chunks)}]\n\n{chunk}")
+            else:
+                for chunk in chunks:
+                    resp.message(chunk)
         else:
             resp.message(response_text)
-            print(f"✅ Response sent: {response_text[:100]}...")
+            print(f"✅ Response sent: {len(response_text)} chars")
         
         return str(resp)
     
@@ -150,22 +156,54 @@ def send_message():
         return {'error': str(e)}, 500
 
 
-def split_message(text, max_length=1500):
-    """Split long messages into chunks"""
+def split_message(text, max_length=1200):
+    """
+    Split long messages into WhatsApp-safe chunks
+    WhatsApp sandbox limit: ~1600 chars, using 1200 to be safe
+    """
+    # If message is short enough, return as-is
+    if len(text) <= max_length:
+        return [text]
+    
     chunks = []
     current_chunk = ""
     
-    for line in text.split('\n'):
-        if len(current_chunk) + len(line) + 1 > max_length:
-            chunks.append(current_chunk)
-            current_chunk = line
+    # Split by paragraphs first (double newline)
+    paragraphs = text.split('\n\n')
+    
+    for para in paragraphs:
+        # If adding this paragraph exceeds limit, save current chunk
+        if current_chunk and len(current_chunk) + len(para) + 2 > max_length:
+            chunks.append(current_chunk.strip())
+            current_chunk = para
+        # If single paragraph is too long, split by sentences
+        elif len(para) > max_length:
+            sentences = para.split('. ')
+            for sentence in sentences:
+                if len(current_chunk) + len(sentence) + 2 > max_length:
+                    if current_chunk:
+                        chunks.append(current_chunk.strip())
+                    current_chunk = sentence
+                else:
+                    current_chunk += '. ' + sentence if current_chunk else sentence
         else:
-            current_chunk += '\n' + line if current_chunk else line
+            current_chunk += '\n\n' + para if current_chunk else para
     
+    # Add remaining chunk
     if current_chunk:
-        chunks.append(current_chunk)
+        chunks.append(current_chunk.strip())
     
-    return chunks
+    # Safety check: if any chunk is still too long, hard split it
+    final_chunks = []
+    for chunk in chunks:
+        if len(chunk) <= max_length:
+            final_chunks.append(chunk)
+        else:
+            # Hard split at max_length
+            for i in range(0, len(chunk), max_length):
+                final_chunks.append(chunk[i:i+max_length])
+    
+    return final_chunks
 
 
 if __name__ == '__main__':
