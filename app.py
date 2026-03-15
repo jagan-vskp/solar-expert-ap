@@ -45,6 +45,12 @@ def webhook():
         
         print(f"\n📱 Message from {from_number}: {incoming_msg}")
         
+        # Empty message check
+        if not incoming_msg:
+            resp = MessagingResponse()
+            resp.message("I didn't receive any message. Please try again!")
+            return str(resp)
+        
         # Get or create conversation
         conversation = get_or_create_expert(from_number)
         expert = conversation['expert']
@@ -60,7 +66,7 @@ def webhook():
             response_text = "🔄 Conversation reset! I'm Surya, ready to help with solar in Andhra Pradesh. What would you like to know?"
         
         elif incoming_msg.lower() in ['help', 'menu']:
-            response_text = """🌞 **Surya - Solar Expert Menu**
+            response_text = """🌞 Surya - Solar Expert Menu
 
 Ask me anything about:
 ✅ Solar costs in AP
@@ -72,28 +78,33 @@ Ask me anything about:
 ✅ Monsoon/maintenance
 
 Commands:
-• 'reset' - Start new chat
-• 'help' - This menu
+• reset - Start new chat
+• help - This menu
 
 Just ask naturally! I'll Google search for latest info."""
         
         else:
-            # Get AI response
-            response_text = expert.chat(incoming_msg)
+            # Get AI response with timeout handling
+            print(f"🤖 Getting AI response...")
+            try:
+                response_text = expert.chat(incoming_msg)
+                print(f"✅ AI response received: {len(response_text)} chars")
+            except Exception as ai_error:
+                print(f"❌ AI Error: {ai_error}")
+                response_text = "I'm having trouble connecting to my knowledge base. Please try again in a moment or type 'help' for options."
         
         # Create Twilio response
         resp = MessagingResponse()
-        msg = resp.message()
         
         # Split long messages (WhatsApp limit ~1600 chars)
         if len(response_text) > 1500:
             chunks = split_message(response_text, 1500)
             for chunk in chunks:
-                msg.body(chunk)
+                resp.message(chunk)
+            print(f"✅ Response sent in {len(chunks)} chunks")
         else:
-            msg.body(response_text)
-        
-        print(f"✅ Response sent: {response_text[:100]}...")
+            resp.message(response_text)
+            print(f"✅ Response sent: {response_text[:100]}...")
         
         return str(resp)
     
