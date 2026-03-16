@@ -31,6 +31,8 @@ class SolarExpert:
             self.client = openai
         
         self.history = []
+        self.knowledge_base = {}
+        self._load_knowledge_base()
         self._init_persona()
         
         print("\n🌞" * 35)
@@ -39,15 +41,80 @@ class SolarExpert:
         print("\n👋 Namaste! I'm Surya, your solar consultant for AP.")
         print("   Ask me anything - I'll Google search for latest info!\n")
     
+    def _load_knowledge_base(self):
+        """Load reference documents into memory"""
+        print("\n📚 Loading knowledge base documents...")
+        
+        # Get the directory where main.py is located
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Documents to load
+        docs = {
+            'kusum_quick': 'KUSUM_C_Quick_Reference.md',
+            'kusum_full': 'KUSUM_C_Scheme_Andhra_Pradesh.md',
+            'solar_park': 'Solar_Park_Presentation_Content.md'
+        }
+        
+        loaded_count = 0
+        for key, filename in docs.items():
+            try:
+                filepath = os.path.join(base_dir, filename)
+                if os.path.exists(filepath):
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        # Store only first 3000 chars to avoid token limits
+                        self.knowledge_base[key] = content[:3000]
+                        loaded_count += 1
+                        print(f"   ✅ {filename}")
+                else:
+                    print(f"   ⚠️  {filename} not found")
+            except Exception as e:
+                print(f"   ❌ Error loading {filename}: {e}")
+        
+        print(f"📚 Loaded {loaded_count}/{len(docs)} documents\n")
+        return self.knowledge_base
+    
+    def _get_relevant_context(self, message: str) -> str:
+        """Get relevant context from knowledge base based on user query"""
+        context = ""
+        msg_lower = message.lower()
+        
+        # KUSUM scheme keywords
+        kusum_keywords = ['kusum', 'subsidy', 'scheme', 'pump', 'farmer', 'agricultural', 
+                         'govt scheme', 'government scheme', 'solar pump']
+        
+        # Solar park keywords
+        park_keywords = ['solar park', 'ultra mega', 'ntr solar', 'ananthapuram park',
+                        'anantapur park', 'large scale', 'mega solar']
+        
+        # Check for KUSUM-related query
+        if any(keyword in msg_lower for keyword in kusum_keywords):
+            if 'kusum_quick' in self.knowledge_base:
+                context += f"\n\n📋 KUSUM-C SCHEME REFERENCE:\n{self.knowledge_base['kusum_quick']}\n"
+                print("   📋 Using KUSUM-C Quick Reference")
+        
+        # Check for Solar Park query
+        if any(keyword in msg_lower for keyword in park_keywords):
+            if 'solar_park' in self.knowledge_base:
+                context += f"\n\n🏭 SOLAR PARK REFERENCE:\n{self.knowledge_base['solar_park']}\n"
+                print("   🏭 Using Solar Park document")
+        
+        return context
+    
     def _init_persona(self):
         prompt = """You are Surya, a friendly 15+ year solar expert in Andhra Pradesh.
 
 PERSONALITY: Warm, conversational, enthusiastic, patient, uses Telugu/Hindi terms
 
 EXPERTISE: AP solar policies, APERC, subsidies, Kurnool/Anantapur conditions,
-monsoon installations, local suppliers, net metering, costs
+monsoon installations, local suppliers, net metering, costs, KUSUM schemes, Solar Parks
 
 KEY FACTS: AP has 5.4 sun hrs, Kurnool 5.8, cost ₹40-48/W, electricity ₹4-9/kWh
+
+KNOWLEDGE BASE: You have access to official documents about:
+- KUSUM-C Scheme (solar pumps for farmers)
+- AP Solar Parks (NTR Ultra Mega Solar Park in Anantapur)
+- When these documents are provided in context, USE THEM as primary reference
 
 IMPORTANT FOR WHATSAPP:
 - Keep responses CONCISE (under 1000 chars when possible)
@@ -61,6 +128,7 @@ RESPONSE STYLE:
 - Give direct answer first
 - Add details if needed
 - End with helpful follow-up question
+- When using reference documents, cite them naturally
 
 STYLE: Ask questions, give AP examples, calculate in INR, use analogies, be encouraging
 
@@ -92,14 +160,20 @@ You're passionate about helping AP adopt solar!"""
     def chat(self, msg):
         self.history.append({"role": "user", "content": msg})
         
+        # Check if we should use knowledge base
+        kb_context = self._get_relevant_context(msg)
+        
+        # Check if we should do Google search
         keywords = ['latest', 'current', 'recent', '2026', '2025', 'new', 'price', 'suppliers']
         should_search = any(k in msg.lower() for k in keywords)
         
-        context = ""
+        context = kb_context  # Start with knowledge base context
+        
+        # Add Google search results if needed
         if should_search:
             res = self.google_search(msg)
             if res:
-                context = "\n\nGOOGLE RESULTS:\n"
+                context += "\n\nGOOGLE RESULTS:\n"
                 for i, r in enumerate(res, 1):
                     context += f"{i}. {r['title']}\n{r['url']}\n{r['content']}\n\n"
         
